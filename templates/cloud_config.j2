@@ -1,54 +1,70 @@
-#cloud-config
-write_files:
-  - path: /home/core/install_docker_compose
-    owner: core:core
-    permissions: 0744
-    content: |
-      #!/bin/sh
-      mkdir -p /opt/bin
-      curl -L https://github.com/docker/compose/releases/download/{{ wimpy_docker_compose_version }}/docker-compose-Linux-x86_64 > /opt/bin/docker-compose
-      chmod +x /opt/bin/docker-compose
-  - path: /home/core/docker-compose.yml
-    owner: core:core
-    permissions: 0644
-{% if wimpy_docker_compose_file_provided.stat.exists %}
-    content: |
-      {{ lookup('file', wimpy_docker_compose_file) | regex_replace('image: \"?([a-zA-Z0-9_\$\{\}/.:-]+)\"?', 'image: \\1:' + wimpy_release_version) | indent(6, False) }}
-{% else %}
-    content: |
-      {{ lookup('file', '/tmp/docker-compose_' ~ wimpy_deploy_id ~ '.yml') | indent(6, False) }}
-{% endif %}
+storage:
+  files:
+    - filesystem: "root"
+      path: /home/core/install_docker_compose
+      mode: 0744
+      user: core
+      group: core
+      content:
+        inline: |
+          #!/bin/sh
+          mkdir -p /opt/bin
+          curl -L https://github.com/docker/compose/releases/download/{{ wimpy_docker_compose_version }}/docker-compose-Linux-x86_64 > /opt/bin/docker-compose
+          chmod +x /opt/bin/docker-compose
 
-  - path: /home/core/healthcheck.sh
-    owner: core:core
-    permissions: 0744
-    content: |
-      {{ lookup('file', role_path + '/files/healthcheck.sh') | indent(6, False) }}
+    - filesystem: "root"
+      path: /home/core/docker-compose.yml
+      mode: 0644
+      user: core
+      group: core
+      content:
+        inline: |
+        {% if wimpy_docker_compose_file_provided.stat.exists %}
+          {{ lookup('file', wimpy_docker_compose_file) | regex_replace('image: \"?([a-zA-Z0-9_\$\{\}/.:-]+)\"?', 'image: \\1:' + wimpy_release_version) | indent(6, False) }}
+        {% else %}
+          {{ lookup('file', '/tmp/docker-compose_' ~ wimpy_deploy_id ~ '.yml') | indent(6, False) }}
+        {% endif %}
 
-  {% if wimpy_aws_cloudwatch_enabled -%}
-  - path: /home/core/cloudwatch.conf
-    owner: core:core
-    permissions: 0744
-    content: |
-      log_group = "/{{ wimpy_deployment_environment }}/{{ wimpy_application_name }}"
-      state_file = "/var/log/journald-cloudwatch-logs/state"
-      log_priority = {{ wimpy_aws_cloudwatch_log_level }}
-  - path: /home/core/install_cloudwatch_agent
-    owner: core:core
-    permissions: 0744
-    content: |
-      #!/bin/sh
-      mkdir -p /opt/bin
-      mkdir -p /var/log/journald-cloudwatch-logs/state
-      curl -L https://github.com/advantageous/systemd-cloud-watch/releases/download/v0.2.1/systemd-cloud-watch_linux > /opt/bin/journald-cloudwatch-logs
-      chmod +x /opt/bin/journald-cloudwatch-logs
-  {% endif %}
+    - filesystem: "root"
+      path: /home/core/healthcheck.sh
+      mode: 0744
+      user: core
+      group: core
+      contents:
+        inline: |
+          {{ lookup('file', role_path + '/files/healthcheck.sh') | indent(6, False) }}
 
-coreos:
+    {% if wimpy_aws_cloudwatch_enabled -%}
+    - filesystem: "root"
+      path: /home/core/cloudwatch.conf
+      mode: 0744
+      user: core
+      group: core
+      content:
+        inline: |
+          log_group = "/{{ wimpy_deployment_environment }}/{{ wimpy_application_name }}"
+          state_file = "/var/log/journald-cloudwatch-logs/state"
+          log_priority = {{ wimpy_aws_cloudwatch_log_level }}
+
+    - filesystem: "root"
+      path: /home/core/install_cloudwatch_agent
+      mode: 0744
+      user: core
+      group: core
+      content:
+        inline: |
+          #!/bin/sh
+          mkdir -p /opt/bin
+          mkdir -p /var/log/journald-cloudwatch-logs/state
+          curl -L https://github.com/advantageous/systemd-cloud-watch/releases/download/v0.2.1/systemd-cloud-watch_linux > /opt/bin/journald-cloudwatch-logs
+          chmod +x /opt/bin/journald-cloudwatch-logs
+    {% endif %}
+
+systemd:
   units:
     - name: "{{ wimpy_application_name }}.service"
-      command: "start"
-      content: |
+      enable: true
+      contents: |
         [Unit]
         Description={{ wimpy_application_name }} container
         After=install_docker_compose.service
@@ -82,9 +98,10 @@ coreos:
 
         [Install]
         WantedBy=multi-user.target
+
     - name: install_docker_compose.service
-      command: "start"
-      content: |
+      enable: true
+      contents: |
         [Unit]
         Description=Install docker-compose
         After=docker.service
@@ -97,8 +114,8 @@ coreos:
 
     {% if wimpy_aws_cloudwatch_enabled -%}
     - name: install_cloudwatch_agent.service
-      command: "start"
-      content: |
+      enable: true
+      contents: |
         [Unit]
         Description=Install CloudWatch agent
         After=docker.service
@@ -110,8 +127,8 @@ coreos:
         ExecStart=/home/core/install_cloudwatch_agent
 
     - name: cloudwatch.service
-      command: "start"
-      content: |
+      enable: true
+      contents: |
         [Unit]
         Description=journald-cloudwatch-logs
         Wants=basic.target
@@ -127,6 +144,12 @@ coreos:
         [Install]
         WantedBy=getty.target
     {% endif %}
+
+    - name: update-engine.service
+      mask: true
+
+    - name: locksmithd.service
+      mask: true
 
 {% for unit in wimpy_application_additional_units %}
     {{ unit }}
