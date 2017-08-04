@@ -12,3 +12,4 @@ services:
 {% for env_key in wimpy_application_environment_vars.keys() %}
       - {{ env_key }}
 {% endfor %}
+    hostname: {{ wimpy_application_name }}
