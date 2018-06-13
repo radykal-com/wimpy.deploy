@@ -46,6 +46,14 @@ write_files:
 
 coreos:
   units:
+    - name: update-engine.service
+      mask: true
+      command: stop
+
+    - name: locksmithd.service
+      mask: true
+      command: stop
+
     - name: "{{ wimpy_application_name }}.service"
       command: "start"
       content: |
@@ -131,10 +139,3 @@ coreos:
 {% for unit in wimpy_application_additional_units %}
     {{ unit }}
 {% endfor %}
-
-systemd:
-  units:
-    - name: update-engine.service
-      mask: true
-    - name: locksmithd.service
-      mask: true
