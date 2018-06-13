@@ -131,3 +131,10 @@ coreos:
 {% for unit in wimpy_application_additional_units %}
     {{ unit }}
 {% endfor %}
+
+systemd:
+  units:
+    - name: update-engine.service
+      mask: true
+    - name: locksmithd.service
+      mask: true
